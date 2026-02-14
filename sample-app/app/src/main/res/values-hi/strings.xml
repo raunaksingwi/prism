@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">नमूना ऐप</string>
+    <string name="welcome_message">नमूना ऐप में आपका स्वागत है!</string>
+    <string name="app_description">यह एक बहुभाषी डेमो ऐप है जो अंग्रेजी और हिंदी का समर्थन करता है। व्यक्तिगत अभिवादन देखने के लिए नीचे अपना नाम दर्ज करें।</string>
+    <string name="enter_name_hint">अपना नाम दर्ज करें</string>
+    <string name="submit_button">जमा करें</string>
+    <string name="greeting_message">नमस्ते, %1$s! आपसे मिलकर खुशी हुई!</string>
+    <string name="please_enter_name">कृपया पहले अपना नाम दर्ज करें</string>
+    <string name="features_title">मुख्य विशेषताएं:</string>
+    <string name="feature_1">बहुभाषी समर्थन (अंग्रेजी, हिंदी)</string>
+    <string name="feature_2">सरल और सहज इंटरफ़ेस</string>
+    <string name="feature_3">व्यक्तिगत अभिवादन</string>
+</resources>
