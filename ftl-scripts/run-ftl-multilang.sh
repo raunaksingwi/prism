@@ -410,7 +410,13 @@ if [ -n "$GEMINI_API_KEY" ] && [ ${#LOCALE_ARRAY[@]} -gt 1 ]; then
   cd "$PROJECT_ROOT"
   if command -v python3 &> /dev/null; then
     python3 main.py ftl-analyze "$SCREENSHOTS_BASE" "$SOURCE_LOCALE" "${TARGET_LOCALES[@]}" 2>&1 || {
-      echo -e "${YELLOW}Warning: Prism analysis failed${NC}"
+      echo ""
+      echo -e "${RED}✗ Analysis failed${NC}"
+      echo -e "${YELLOW}This is usually temporary (Gemini API high demand)${NC}"
+      echo -e "${BLUE}Run analysis manually later:${NC}"
+      echo -e "  cd $PROJECT_ROOT"
+      echo -e "  python3 main.py ftl-analyze $SCREENSHOTS_BASE $SOURCE_LOCALE ${TARGET_LOCALES[*]}"
+      echo ""
     }
   else
     echo -e "${YELLOW}Warning: python3 not found, skipping Prism analysis${NC}"

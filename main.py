@@ -54,6 +54,7 @@ def analyze_localization(
     source_image_path: str,
     target_image_path: str,
     prompt: Optional[str] = None,
+    max_retries: int = 3,
 ) -> str:
     """Compare source and target app screenshots to find localization issues.
 
@@ -61,10 +62,13 @@ def analyze_localization(
         source_image_path: Path to the source language screenshot.
         target_image_path: Path to the target/localized language screenshot.
         prompt: Custom prompt to send to the model. Uses DEFAULT_PROMPT if None.
+        max_retries: Maximum number of retry attempts for API calls.
 
     Returns:
         Plain text fix-it instructions for a coding agent.
     """
+    import time
+
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY environment variable is not set")
@@ -73,11 +77,61 @@ def analyze_localization(
     target_image = Image.open(target_image_path)
 
     client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model="gemini-3-flash-preview",
-        contents=[source_image, target_image, prompt or DEFAULT_PROMPT],
+
+    # Try multiple models in case of high demand
+    # Using Gemini 3 flash preview (latest)
+    models = ["gemini-3-flash-preview", "gemini-2.0-flash-exp", "gemini-1.5-flash-latest"]
+
+    last_error = None
+    for model in models:
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=[source_image, target_image, prompt or DEFAULT_PROMPT],
+                )
+                return response.text
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+
+                # Check for high demand / rate limit errors
+                if "503" in error_str or "unavailable" in error_str or "high demand" in error_str:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 2  # 2s, 4s, 6s
+                        print(f"  ⚠️  {model} busy, retrying in {wait_time}s... (attempt {attempt + 2}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        # Try next model
+                        print(f"  ⚠️  {model} unavailable, trying different model...")
+                        break
+
+                # For other errors, raise immediately
+                if "api key" in error_str or "invalid" in error_str:
+                    raise RuntimeError(f"Invalid API key or authentication error: {e}")
+
+                # Unknown error, try next attempt
+                if attempt < max_retries - 1:
+                    print(f"  ⚠️  Error with {model}, retrying...")
+                    time.sleep(2)
+                    continue
+                else:
+                    break
+
+    # All retries exhausted
+    raise RuntimeError(
+        f"Failed to analyze images after trying multiple models and retries.\n"
+        f"Last error: {last_error}\n\n"
+        f"This usually means:\n"
+        f"  1. Gemini API is experiencing high demand (try again in a few minutes)\n"
+        f"  2. API key is invalid or expired\n"
+        f"  3. Network connectivity issues\n\n"
+        f"You can:\n"
+        f"  - Wait a few minutes and run the analysis manually:\n"
+        f"    python3 main.py ftl-analyze <screenshots_dir> en hi\n"
+        f"  - Get a new API key from: https://aistudio.google.com/apikey"
     )
-    return response.text
 
 
 # ---------------------------------------------------------------------------
