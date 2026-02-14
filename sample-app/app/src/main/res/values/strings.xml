@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sample App</string>
+    <string name="welcome_message">Welcome to Sample App!</string>
+    <string name="app_description">This is a multilingual demo app that supports English and Hindi. Enter your name below to see a personalized greeting.</string>
+    <string name="enter_name_hint">Enter your name</string>
+    <string name="submit_button">Submit</string>
+    <string name="greeting_message">Hello, %1$s! Nice to meet you!</string>
+    <string name="please_enter_name">Please enter your name first</string>
+    <string name="features_title">Key Features:</string>
+    <string name="feature_1">Multilingual support (English, Hindi)</string>
+    <string name="feature_2">Simple and intuitive interface</string>
+    <string name="feature_3">Personalized greetings</string>
+</resources>

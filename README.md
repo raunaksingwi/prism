@@ -123,8 +123,9 @@ Issues found: 2
 
 For full FTL automation (build APK, run tests across locales, download screenshots, analyze), see [`ftl-scripts/`](ftl-scripts/README.md).
 
+### Single-command multi-locale test + analysis
+
 ```bash
-# One-command multi-locale test + analysis
 ./ftl-scripts/run-ftl-local.sh \
   --service-account-key ~/gcp-key.json \
   --phone 9876543210 \
@@ -135,20 +136,112 @@ For full FTL automation (build APK, run tests across locales, download screensho
 
 The first locale is the source; the rest are compared against it.
 
+### Multilingual test runner
+
+For more control over devices and locales, use the dedicated multilingual runner:
+
+```bash
+./ftl-scripts/run-ftl-multilang.sh \
+  --service-account-key ~/gcp-key.json \
+  --phone 9876543210 \
+  --otp 123456 \
+  --locales en,hi,es \
+  --devices "redfin,version=30;husky,version=34"
+```
+
+**Options:**
+- `--service-account-key` — GCP service account JSON key (required)
+- `--phone` — Test phone number (required)
+- `--otp` — Test OTP code (required)
+- `--locales` — Comma-separated locales (default: en,hi)
+- `--devices` — Custom device list (default: 3 devices)
+- `--apk-path` — Path to APK (default: auto-detect sample-app)
+- `--skip-build` — Skip APK build
+- `--analyze` — Run Prism analysis (requires `GEMINI_API_KEY`)
+
+## Sample App
+
+A minimal Android app with English and Hindi support is included for testing the FTL scripts. See [`sample-app/README.md`](sample-app/README.md) for details.
+
+```bash
+# Build the sample app
+cd sample-app
+./gradlew assembleDebug
+
+# Run FTL tests in English and Hindi
+cd ../ftl-scripts
+./run-ftl-multilang.sh \
+  --service-account-key ~/gcp-key.json \
+  --phone 9876543210 \
+  --otp 123456 \
+  --locales en,hi
+```
+
+### Adding more languages
+
+1. Create values folder: `sample-app/app/src/main/res/values-<locale>/`
+2. Copy `strings.xml` to the new folder
+3. Translate all string values
+4. Test with FTL: `--locales en,hi,<locale>`
+
+## Use Cases
+
+### RTL Layout Testing
+
+```bash
+./ftl-scripts/run-ftl-multilang.sh \
+  --service-account-key ~/gcp-key.json \
+  --phone 9876543210 \
+  --otp 123456 \
+  --locales en,ar,he
+```
+
+### Screenshot Generation for App Store
+
+```bash
+./ftl-scripts/run-ftl-multilang.sh \
+  --service-account-key ~/gcp-key.json \
+  --phone 9876543210 \
+  --otp 123456 \
+  --locales en,es,fr,de,it,pt \
+  --devices "redfin,version=30"
+```
+
+### CI/CD Integration
+
+```yaml
+- name: Run FTL Multilingual Tests
+  run: |
+    ftl-scripts/run-ftl-multilang.sh \
+      --service-account-key <(echo "${{ secrets.GCP_KEY }}") \
+      --phone ${{ secrets.TEST_PHONE }} \
+      --otp ${{ secrets.TEST_OTP }} \
+      --locales en,hi,es
+```
+
 ## Project Structure
 
 ```
 prism/
-├── main.py              # Core analysis, web crawler, FTL analyzer, CLI
-├── test_main.py         # Test suite
-├── pyproject.toml       # Project config and dependencies
-├── .env                 # Your GEMINI_API_KEY (git-ignored)
-└── ftl-scripts/         # Firebase Test Lab automation
-    ├── run-ftl-local.sh       # Main FTL runner (supports --locales)
-    ├── setup-ftl.sh           # One-time setup for FTL
-    ├── ftl-config.example.sh  # Config template
-    ├── FTL_LOCAL_USAGE.md     # Detailed FTL usage guide
-    └── README.md              # FTL scripts overview
+├── main.py                          # Core analysis, web crawler, FTL analyzer, CLI
+├── test_main.py                     # Test suite
+├── pyproject.toml                   # Project config and dependencies
+├── .env                             # Your GEMINI_API_KEY (git-ignored)
+├── ftl-scripts/                     # Firebase Test Lab scripts
+│   ├── run-ftl-local.sh             # FTL runner (supports --locales)
+│   ├── run-ftl-multilang.sh         # Multilingual test runner
+│   ├── setup-ftl.sh                 # One-time setup
+│   ├── ftl-config.example.sh        # Config template
+│   ├── README.md                    # Quick start
+│   └── FTL_LOCAL_USAGE.md           # Detailed docs
+└── sample-app/                      # Sample Android app
+    ├── app/src/main/
+    │   ├── java/...                 # Kotlin source
+    │   └── res/
+    │       ├── values/              # English strings
+    │       ├── values-hi/           # Hindi strings
+    │       └── layout/              # UI layouts
+    └── README.md
 ```
 
 ## Requirements
@@ -157,6 +250,8 @@ prism/
 - [uv](https://docs.astral.sh/uv/) (package manager)
 - `GEMINI_API_KEY` environment variable
 - Playwright Chromium (for web crawling only — `uv run playwright install chromium`)
+- gcloud CLI (for FTL scripts — `brew install google-cloud-sdk`)
+- Java 17+ and Android SDK (for building the sample app)
 
 ## Development
 
@@ -167,6 +262,14 @@ uv run pytest test_main.py -v
 # Run tests with coverage
 uv run pytest test_main.py -v --cov=main
 ```
+
+## Cost Optimization
+
+Firebase Test Lab charges per device-hour (~$5/hour physical, ~$1/hour virtual). Tips:
+- Use `--skip-build` after first run
+- Test fewer devices: `--devices "redfin,version=30"`
+- Test fewer locales during development
+- Use the free daily quota (10 physical, 5 virtual tests/day)
 
 ## How It Works
 
