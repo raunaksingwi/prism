@@ -32,42 +32,21 @@ else
   exit 1
 fi
 
-# Check Node.js
-echo -e "${BLUE}2. Checking Node.js...${NC}"
-if command -v node &> /dev/null; then
-  NODE_VERSION=$(node --version)
-  echo -e "${GREEN}✓ Node.js installed ($NODE_VERSION)${NC}\n"
+# Check Python
+echo -e "${BLUE}2. Checking Python...${NC}"
+if command -v python3 &> /dev/null; then
+  PYTHON_VERSION=$(python3 --version)
+  echo -e "${GREEN}✓ $PYTHON_VERSION installed${NC}\n"
 else
-  echo -e "${YELLOW}✗ Node.js not found${NC}"
-  echo -e "Install from: https://nodejs.org/\n"
+  echo -e "${YELLOW}✗ Python 3 not found${NC}"
+  echo -e "Install from: https://www.python.org/\n"
   exit 1
 fi
 
-# Check npm
-echo -e "${BLUE}3. Checking npm...${NC}"
-if command -v npm &> /dev/null; then
-  NPM_VERSION=$(npm --version)
-  echo -e "${GREEN}✓ npm installed (v$NPM_VERSION)${NC}\n"
-else
-  echo -e "${YELLOW}✗ npm not found${NC}"
-  echo -e "Install from: https://nodejs.org/\n"
-  exit 1
-fi
-
-# Install analysis script dependencies
-echo -e "${BLUE}4. Installing analysis script dependencies...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ -f "$SCRIPT_DIR/package.json" ]; then
-  cd "$SCRIPT_DIR"
-  npm install
-  echo -e "${GREEN}✓ Dependencies installed${NC}\n"
-else
-  echo -e "${YELLOW}Warning: package.json not found in $SCRIPT_DIR${NC}\n"
-fi
-
 # Check for service account key
-echo -e "${BLUE}5. Checking for service account key...${NC}"
+echo -e "${BLUE}3. Checking for service account key...${NC}"
 read -p "Enter path to your GCP service account key JSON (or press Enter to skip): " KEY_PATH
 
 if [ -n "$KEY_PATH" ]; then
@@ -81,7 +60,7 @@ if [ -n "$KEY_PATH" ]; then
       echo -e "${GREEN}✓ Project ID: $PROJECT_ID${NC}\n"
 
       # Enable required APIs
-      echo -e "${BLUE}6. Enabling required Google Cloud APIs...${NC}"
+      echo -e "${BLUE}4. Enabling required Google Cloud APIs...${NC}"
       gcloud auth activate-service-account --key-file="$KEY_PATH"
       gcloud config set project "$PROJECT_ID"
 
@@ -105,18 +84,18 @@ else
   echo -e "${YELLOW}Skipped. You can enable APIs manually later.${NC}\n"
 fi
 
-# Check for ANTHROPIC_API_KEY
-echo -e "${BLUE}7. Checking for Anthropic API key...${NC}"
-if [ -n "$ANTHROPIC_API_KEY" ]; then
-  echo -e "${GREEN}✓ ANTHROPIC_API_KEY is set${NC}\n"
+# Check for GEMINI_API_KEY
+echo -e "${BLUE}5. Checking for Gemini API key...${NC}"
+if [ -n "$GEMINI_API_KEY" ]; then
+  echo -e "${GREEN}✓ GEMINI_API_KEY is set${NC}\n"
 else
-  echo -e "${YELLOW}✗ ANTHROPIC_API_KEY not set${NC}"
-  echo -e "To use Claude analysis, set it in your shell profile:"
-  echo -e "  ${BLUE}export ANTHROPIC_API_KEY=\"sk-ant-...\"${NC}\n"
+  echo -e "${YELLOW}✗ GEMINI_API_KEY not set${NC}"
+  echo -e "To use Prism analysis, set it in your shell profile:"
+  echo -e "  ${BLUE}export GEMINI_API_KEY=\"your-key-here\"${NC}\n"
 fi
 
 # Create example config file
-echo -e "${BLUE}8. Creating example configuration...${NC}"
+echo -e "${BLUE}6. Creating example configuration...${NC}"
 cat > "$SCRIPT_DIR/ftl-config.example.sh" << 'EOF'
 #!/bin/bash
 
@@ -135,12 +114,12 @@ export FTL_TEST_OTP="123456"
 export FTL_PROJECT_ID="your-gcp-project-id"
 export FTL_BUCKET_NAME="your-bucket-name"
 
-# Claude API Key (for analysis)
-export ANTHROPIC_API_KEY="sk-ant-api03-..."
+# Gemini API Key (for Prism localization analysis)
+export GEMINI_API_KEY="your-gemini-api-key"
 
 # Quick run command
 alias ftl-run='./run-ftl-local.sh --service-account-key "$FTL_SERVICE_ACCOUNT_KEY" --phone "$FTL_TEST_PHONE" --otp "$FTL_TEST_OTP"'
-alias ftl-analyze='./run-ftl-local.sh --service-account-key "$FTL_SERVICE_ACCOUNT_KEY" --phone "$FTL_TEST_PHONE" --otp "$FTL_TEST_OTP" --analyze'
+alias ftl-analyze='./run-ftl-local.sh --service-account-key "$FTL_SERVICE_ACCOUNT_KEY" --phone "$FTL_TEST_PHONE" --otp "$FTL_TEST_OTP" --analyze --locales en,fr,es'
 alias ftl-quick='./run-ftl-local.sh --service-account-key "$FTL_SERVICE_ACCOUNT_KEY" --phone "$FTL_TEST_PHONE" --otp "$FTL_TEST_OTP" --skip-build'
 EOF
 

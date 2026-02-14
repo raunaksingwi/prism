@@ -16,7 +16,8 @@
 #   --project-id <id>             GCP project ID (optional, read from key if not provided)
 #   --bucket <name>               GCS bucket name (optional, auto-generated if not provided)
 #   --skip-build                  Skip APK build (use existing APK)
-#   --analyze                     Run Claude analysis after tests
+#   --analyze                     Run Prism localization analysis after tests
+#   --locales <locale,...>          Comma-separated locales (default: en)
 #   --help                        Show this help message
 #
 # Example:
@@ -24,7 +25,8 @@
 #     --service-account-key ~/gcp-key.json \
 #     --phone 9876543210 \
 #     --otp 123456 \
-#     --analyze
+#     --analyze \
+#     --locales en,fr,es
 ###############################################################################
 
 set -e  # Exit on error
@@ -44,6 +46,7 @@ TEST_PHONE=""
 TEST_OTP=""
 PROJECT_ID=""
 BUCKET_NAME=""
+LOCALES="en"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -75,6 +78,10 @@ while [[ $# -gt 0 ]]; do
     --analyze)
       RUN_ANALYSIS=true
       shift
+      ;;
+    --locales)
+      LOCALES="$2"
+      shift 2
       ;;
     --help)
       head -n 30 "$0" | tail -n +3
@@ -143,6 +150,7 @@ echo -e "Service Account: $SERVICE_ACCOUNT_KEY"
 echo -e "GCP Project: $PROJECT_ID"
 echo -e "GCS Bucket: $BUCKET_NAME"
 echo -e "Results Dir: $RESULTS_DIR"
+echo -e "Locales: $LOCALES"
 echo -e "${BLUE}========================================${NC}\n"
 
 # Check dependencies
@@ -154,8 +162,8 @@ if ! command -v gcloud &> /dev/null; then
   exit 1
 fi
 
-if ! command -v node &> /dev/null; then
-  echo -e "${YELLOW}Warning: node not found, analysis will be skipped${NC}"
+if ! command -v python3 &> /dev/null; then
+  echo -e "${YELLOW}Warning: python3 not found, analysis will be skipped${NC}"
   RUN_ANALYSIS=false
 fi
 
@@ -239,21 +247,31 @@ echo -e "${GREEN}✓ Robo script prepared${NC}\n"
 echo -e "${BLUE}Running Firebase Test Lab tests...${NC}"
 echo -e "${YELLOW}This may take 10-15 minutes...${NC}\n"
 
-gcloud firebase test android run \
-  --type robo \
-  --app "$APK_PATH" \
-  --robo-script "$ROBO_SCRIPT_TEMP" \
-  --device model=starlte,version=29,locale=en,orientation=portrait \
-  --device model=redfin,version=30,locale=en,orientation=portrait \
-  --device model=caprip,version=31,locale=en,orientation=portrait \
-  --device model=cheetah,version=33,locale=en,orientation=portrait \
-  --device model=husky,version=34,locale=en,orientation=portrait \
-  --device model=pa3q,version=35,locale=en,orientation=portrait \
-  --device model=a26x,version=36,locale=en,orientation=portrait \
-  --timeout 15m \
-  --results-bucket "$BUCKET_NAME" \
-  --results-dir "$RESULTS_DIR" \
-  --format="json" > "$SCRIPT_DIR/ftl-results.json" 2>&1 || true
+# Split comma-separated locales into array
+IFS=',' read -ra LOCALE_ARRAY <<< "$LOCALES"
+
+# Clear previous results file
+> "$SCRIPT_DIR/ftl-results.json"
+
+for LOCALE in "${LOCALE_ARRAY[@]}"; do
+  echo -e "${BLUE}Running FTL for locale: $LOCALE${NC}"
+  gcloud firebase test android run \
+    --type robo \
+    --app "$APK_PATH" \
+    --robo-script "$ROBO_SCRIPT_TEMP" \
+    --device model=starlte,version=29,locale=$LOCALE,orientation=portrait \
+    --device model=redfin,version=30,locale=$LOCALE,orientation=portrait \
+    --device model=caprip,version=31,locale=$LOCALE,orientation=portrait \
+    --device model=cheetah,version=33,locale=$LOCALE,orientation=portrait \
+    --device model=husky,version=34,locale=$LOCALE,orientation=portrait \
+    --device model=pa3q,version=35,locale=$LOCALE,orientation=portrait \
+    --device model=a26x,version=36,locale=$LOCALE,orientation=portrait \
+    --timeout 15m \
+    --results-bucket "$BUCKET_NAME" \
+    --results-dir "$RESULTS_DIR" \
+    --format="json" >> "$SCRIPT_DIR/ftl-results.json" 2>&1 || true
+  echo -e "${GREEN}✓ Locale $LOCALE complete${NC}"
+done
 
 # Clean up temp robo script
 rm -f "$ROBO_SCRIPT_TEMP"
@@ -291,29 +309,22 @@ fi
 
 # Run analysis if requested
 if [ "$RUN_ANALYSIS" = true ] && [ $total_screenshots -gt 0 ]; then
-  echo -e "${BLUE}Running Claude analysis...${NC}"
+  echo -e "${BLUE}Running Prism localization analysis...${NC}"
 
-  cd "$SCRIPT_DIR"
-
-  # Install analysis script dependencies if needed
-  if [ ! -d "node_modules" ]; then
-    npm install
-  fi
-
-  # Set environment variables for analysis
-  export SCREENSHOTS_DIR="$SCREENSHOTS_DIR"
-  export GCS_BUCKET="$BUCKET_NAME"
-  export GCS_RESULTS_DIR="$RESULTS_DIR"
-
-  if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo -e "${YELLOW}Warning: ANTHROPIC_API_KEY not set, analysis will be skipped${NC}"
+  if [ -z "$GEMINI_API_KEY" ]; then
+    echo -e "${YELLOW}Warning: GEMINI_API_KEY not set, analysis will be skipped${NC}"
   else
-    node analyze-screenshots.js || {
-      echo -e "${YELLOW}Warning: Analysis failed, continuing...${NC}"
-    }
+    # First locale is source, rest are targets
+    SOURCE_LOCALE="${LOCALE_ARRAY[0]}"
+    TARGET_LOCALES="${LOCALE_ARRAY[@]:1}"
 
-    if [ -f "analysis-report.json" ]; then
-      echo -e "${GREEN}✓ Analysis report saved: $SCRIPT_DIR/analysis-report.json${NC}\n"
+    if [ -z "$TARGET_LOCALES" ]; then
+      echo -e "${YELLOW}Warning: Only one locale specified, nothing to compare${NC}"
+    else
+      export GEMINI_API_KEY
+      python3 main.py ftl-analyze "$SCREENSHOTS_DIR" "$SOURCE_LOCALE" $TARGET_LOCALES || {
+        echo -e "${YELLOW}Warning: Analysis failed, continuing...${NC}"
+      }
     fi
   fi
 fi
@@ -326,8 +337,8 @@ echo -e "Results: $SCREENSHOTS_DIR"
 echo -e "GCS Path: gs://$BUCKET_NAME/$RESULTS_DIR"
 echo -e "FTL JSON: $SCRIPT_DIR/ftl-results.json"
 
-if [ "$RUN_ANALYSIS" = true ] && [ -f "$SCRIPT_DIR/analysis-report.json" ]; then
-  echo -e "Analysis: $SCRIPT_DIR/analysis-report.json"
+if [ "$RUN_ANALYSIS" = true ]; then
+  echo -e "Analysis: Prism localization drift (printed above)"
 fi
 
 echo -e "${BLUE}========================================${NC}\n"

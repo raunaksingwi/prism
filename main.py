@@ -125,6 +125,128 @@ def _safe_filename(route: str) -> str:
     return cleaned.replace("/", "_")
 
 
+# ---------------------------------------------------------------------------
+# FTL helpers
+# ---------------------------------------------------------------------------
+
+
+def _parse_device_key(dirname: str) -> tuple[str, str] | None:
+    """Parse an FTL device directory name into (device_key, locale).
+
+    FTL directories follow the pattern: <model>-<apiLevel>-<locale>-<orientation>
+    e.g. "starlte-29-en-portrait" → ("starlte-29-portrait", "en")
+
+    Returns None if the directory name has fewer than 4 parts.
+    """
+    parts = dirname.split("-")
+    if len(parts) < 4:
+        return None
+    model = parts[0]
+    version = parts[1]
+    locale = parts[2]
+    orientation = "-".join(parts[3:])
+    device_key = f"{model}-{version}-{orientation}"
+    return device_key, locale
+
+
+def _group_device_dirs(
+    screenshots_dir: str,
+) -> dict[str, dict[str, str]]:
+    """Group FTL device subdirectories by device key and locale.
+
+    Returns: {device_key: {locale: dir_path}}
+    """
+    groups: dict[str, dict[str, str]] = {}
+    for entry in sorted(os.listdir(screenshots_dir)):
+        full_path = os.path.join(screenshots_dir, entry)
+        if not os.path.isdir(full_path):
+            continue
+        parsed = _parse_device_key(entry)
+        if parsed is None:
+            continue
+        device_key, locale = parsed
+        groups.setdefault(device_key, {})[locale] = full_path
+    return groups
+
+
+# ---------------------------------------------------------------------------
+# FTL analyze
+# ---------------------------------------------------------------------------
+
+
+def ftl_analyze(
+    screenshots_dir: str,
+    source_locale: str,
+    target_locales: list[str],
+) -> list[dict]:
+    """Analyze FTL screenshots across locales for localization drift.
+
+    Walks the screenshots directory, groups device subdirs by device key,
+    then compares matched PNG files between source and target locales
+    using analyze_localization().
+
+    Args:
+        screenshots_dir: Path to the FTL screenshots root directory.
+        source_locale: The source locale code (e.g. "en").
+        target_locales: List of target locale codes to compare against.
+
+    Returns:
+        List of issue dicts with keys: device, target_locale, filename, analysis.
+
+    Raises:
+        FileNotFoundError: If screenshots_dir does not exist.
+    """
+    if not os.path.isdir(screenshots_dir):
+        raise FileNotFoundError(
+            f"Screenshots directory not found: {screenshots_dir}"
+        )
+
+    groups = _group_device_dirs(screenshots_dir)
+    issues: list[dict] = []
+
+    for device_key, locale_dirs in groups.items():
+        source_dir = locale_dirs.get(source_locale)
+        if source_dir is None:
+            continue
+
+        source_pngs = {
+            f for f in os.listdir(source_dir) if f.lower().endswith(".png")
+        }
+
+        for target_locale in target_locales:
+            target_dir = locale_dirs.get(target_locale)
+            if target_dir is None:
+                continue
+
+            target_pngs = {
+                f for f in os.listdir(target_dir) if f.lower().endswith(".png")
+            }
+
+            matched = source_pngs & target_pngs
+            skipped = (source_pngs | target_pngs) - matched
+            if skipped:
+                print(
+                    f"  [{device_key}/{target_locale}] "
+                    f"Skipped {len(skipped)} unmatched file(s)"
+                )
+
+            for filename in sorted(matched):
+                source_path = os.path.join(source_dir, filename)
+                target_path = os.path.join(target_dir, filename)
+
+                analysis = analyze_localization(source_path, target_path)
+
+                if "no localization issues" not in analysis.lower():
+                    issues.append({
+                        "device": device_key,
+                        "target_locale": target_locale,
+                        "filename": filename,
+                        "analysis": analysis,
+                    })
+
+    return issues
+
+
 def _extract_same_domain_links(page, base_url: str) -> set[str]:
     """Extract all same-domain links from the page, normalized to paths without query/fragment."""
     parsed_base = urlparse(base_url)
@@ -254,6 +376,32 @@ def crawl_and_analyze(
 # ---------------------------------------------------------------------------
 
 
+def _print_ftl_report(issues: list[dict]) -> None:
+    """Print a summary report of FTL localization issues grouped by device."""
+    print("\n" + "=" * 60)
+    print("FTL LOCALIZATION DRIFT REPORT")
+    print("=" * 60)
+    print(f"Issues found: {len(issues)}")
+
+    if not issues:
+        print("\nNo localization issues detected across any devices.")
+        return
+
+    by_device: dict[str, list[dict]] = {}
+    for issue in issues:
+        by_device.setdefault(issue["device"], []).append(issue)
+
+    for device, device_issues in by_device.items():
+        print(f"\n--- Device: {device} ---")
+        for issue in device_issues:
+            print(f"\n  Locale: {issue['target_locale']}")
+            print(f"  File: {issue['filename']}")
+            for line in issue["analysis"].strip().splitlines():
+                print(f"    {line}")
+
+    print("\n" + "=" * 60)
+
+
 def _print_report(issues: list[dict], pages_crawled: int) -> None:
     """Print a summary report of all localization issues found."""
     print("\n" + "=" * 60)
@@ -290,6 +438,7 @@ if __name__ == "__main__":
         print("Usage:")
         print("  python main.py analyze <source_image> <target_image>")
         print("  python main.py crawl <base_url> <source_locale> <target_locale> [target_locale...]")
+        print("  python main.py ftl-analyze <screenshots_dir> <source_locale> <target_locale> [target_locale...]")
         sys.exit(1)
 
     command = sys.argv[1]
@@ -313,7 +462,19 @@ if __name__ == "__main__":
         )
         _print_report(found_issues, total_pages)
 
+    elif command == "ftl-analyze":
+        if len(sys.argv) < 5:
+            print("Usage: python main.py ftl-analyze <screenshots_dir> <source_locale> <target_locale> [target_locale...]")
+            sys.exit(1)
+        ftl_screenshots_dir = sys.argv[2]
+        ftl_source_locale = sys.argv[3]
+        ftl_target_locales = sys.argv[4:]
+        found_issues = ftl_analyze(
+            ftl_screenshots_dir, ftl_source_locale, ftl_target_locales
+        )
+        _print_ftl_report(found_issues)
+
     else:
         print(f"Unknown command: {command}")
-        print("Available commands: analyze, crawl")
+        print("Available commands: analyze, crawl, ftl-analyze")
         sys.exit(1)
