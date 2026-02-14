@@ -349,6 +349,52 @@ echo -e "Results saved to: $SCREENSHOTS_BASE"
 echo -e "GCS Bucket: gs://$BUCKET_NAME"
 echo -e "${BLUE}========================================${NC}\n"
 
+# Prompt for Gemini API key if not set and multiple locales tested
+if [ -z "$GEMINI_API_KEY" ] && [ ${#LOCALE_ARRAY[@]} -gt 1 ]; then
+  # Try to load from .env file
+  ENV_FILE="$PROJECT_ROOT/.env"
+  if [ -f "$ENV_FILE" ]; then
+    GEMINI_API_KEY=$(grep "^GEMINI_API_KEY=" "$ENV_FILE" | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+    if [ -n "$GEMINI_API_KEY" ]; then
+      export GEMINI_API_KEY
+      echo -e "${GREEN}✓ Loaded Gemini API key from .env${NC}\n"
+    fi
+  fi
+fi
+
+# Prompt for Gemini API key if still not set
+if [ -z "$GEMINI_API_KEY" ] && [ ${#LOCALE_ARRAY[@]} -gt 1 ]; then
+  echo -e "${YELLOW}Gemini API key not found${NC}"
+  echo -e "${BLUE}Would you like to run AI-powered localization drift analysis?${NC}"
+  echo -e "Get a free API key from: ${BLUE}https://aistudio.google.com/apikey${NC}"
+  echo ""
+  read -p "Enter Gemini API key (or press Enter to skip): " USER_GEMINI_KEY
+
+  if [ -n "$USER_GEMINI_KEY" ]; then
+    export GEMINI_API_KEY="$USER_GEMINI_KEY"
+    echo -e "${GREEN}✓ API key set${NC}"
+
+    # Ask to save for future use
+    read -p "Save API key to .env for future use? (y/N): " SAVE_KEY
+    if [[ "$SAVE_KEY" =~ ^[Yy]$ ]]; then
+      ENV_FILE="$PROJECT_ROOT/.env"
+      if grep -q "^GEMINI_API_KEY=" "$ENV_FILE" 2>/dev/null; then
+        # Update existing key
+        sed -i.bak "s/^GEMINI_API_KEY=.*/GEMINI_API_KEY=\"$USER_GEMINI_KEY\"/" "$ENV_FILE"
+        rm -f "$ENV_FILE.bak"
+      else
+        # Add new key
+        echo "GEMINI_API_KEY=\"$USER_GEMINI_KEY\"" >> "$ENV_FILE"
+      fi
+      echo -e "${GREEN}✓ API key saved to $ENV_FILE${NC}\n"
+    else
+      echo ""
+    fi
+  else
+    echo -e "${YELLOW}Skipping analysis${NC}\n"
+  fi
+fi
+
 # Run Prism localization analysis if GEMINI_API_KEY is set and multiple locales tested
 if [ -n "$GEMINI_API_KEY" ] && [ ${#LOCALE_ARRAY[@]} -gt 1 ]; then
   echo -e "${BLUE}Running Prism localization analysis...${NC}"
