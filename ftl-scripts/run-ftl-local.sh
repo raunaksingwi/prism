@@ -17,7 +17,7 @@
 #   --bucket <name>               GCS bucket name (optional, auto-generated if not provided)
 #   --skip-build                  Skip APK build (use existing APK)
 #   --analyze                     Run Prism localization analysis after tests
-#   --locales <locale,...>          Comma-separated locales (default: en)
+#   --locales <locale,...>          Comma-separated locales (default: en,hi)
 #   --help                        Show this help message
 #
 # Example:
@@ -26,7 +26,7 @@
 #     --phone 9876543210 \
 #     --otp 123456 \
 #     --analyze \
-#     --locales en,fr,es
+#     --locales en,hi
 ###############################################################################
 
 set -e  # Exit on error
@@ -46,7 +46,7 @@ TEST_PHONE=""
 TEST_OTP=""
 PROJECT_ID=""
 BUCKET_NAME=""
-LOCALES="en"
+LOCALES="en,hi"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do

@@ -131,7 +131,7 @@ For full FTL automation (build APK, run tests across locales, download screensho
   --phone 9876543210 \
   --otp 123456 \
   --analyze \
-  --locales en,fr,es
+  --locales en,hi
 ```
 
 The first locale is the source; the rest are compared against it.

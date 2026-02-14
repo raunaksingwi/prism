@@ -89,7 +89,7 @@ export GEMINI_API_KEY="your-key"
   --phone 9876543210 \
   --otp 123456 \
   --analyze \
-  --locales en,fr,es
+  --locales en,hi
 ```
 
 ### Skip Build (Faster)

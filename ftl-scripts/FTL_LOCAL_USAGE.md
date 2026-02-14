@@ -10,7 +10,7 @@ cd ftl-scripts
   --phone 9876543210 \
   --otp 123456 \
   --analyze \
-  --locales en,fr,es
+  --locales en,hi
 ```
 
 ## Prerequisites
@@ -67,7 +67,7 @@ Python 3 is required for localization analysis. Ensure `python3` is on your PATH
 | `--bucket <name>` | No | GCS bucket name (auto-generated if not provided) |
 | `--skip-build` | No | Skip APK build (use existing APK) |
 | `--analyze` | No | Run Prism localization analysis after tests |
-| `--locales <locale,...>` | No | Comma-separated locales to test (default: `en`) |
+| `--locales <locale,...>` | No | Comma-separated locales to test (default: `en,hi`) |
 | `--help` | No | Show help message |
 
 ## Usage Examples
@@ -101,10 +101,10 @@ export GEMINI_API_KEY="your-key"
   --phone 9876543210 \
   --otp 123456 \
   --analyze \
-  --locales en,fr,es,de
+  --locales en,hi
 ```
 
-The first locale (`en`) is treated as the source. All subsequent locales (`fr`, `es`, `de`) are compared against it for localization drift.
+The first locale (`en`) is treated as the source. All subsequent locales (`hi`) are compared against it for localization drift.
 
 ### Use Custom Bucket
 
@@ -350,7 +350,7 @@ jobs:
             --phone ${{ secrets.TEST_PHONE_NUMBER }} \
             --otp ${{ secrets.TEST_OTP }} \
             --analyze \
-            --locales en,fr,es
+            --locales en,hi
 ```
 
 ## Next Steps
