@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 from collections import deque
+from typing import Optional
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
@@ -52,7 +53,7 @@ If the target faithfully reproduces the source layout (or differences are too mi
 def analyze_localization(
     source_image_path: str,
     target_image_path: str,
-    prompt: str | None = None,
+    prompt: Optional[str] = None,
 ) -> str:
     """Compare source and target app screenshots to find localization issues.
 
@@ -130,7 +131,7 @@ def _safe_filename(route: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _parse_device_key(dirname: str) -> tuple[str, str] | None:
+def _parse_device_key(dirname: str) -> Optional[tuple[str, str]]:
     """Parse an FTL device directory name into (device_key, locale).
 
     FTL directories follow the pattern: <model>-<apiLevel>-<locale>-<orientation>
@@ -154,18 +155,53 @@ def _group_device_dirs(
 ) -> dict[str, dict[str, str]]:
     """Group FTL device subdirectories by device key and locale.
 
+    Handles both flat and nested FTL directory structures:
+    - Flat: screenshots_dir/device-version-locale-orientation/
+    - Nested: screenshots_dir/locale/ftl-results-*/device-version-locale-orientation/
+
     Returns: {device_key: {locale: dir_path}}
     """
     groups: dict[str, dict[str, str]] = {}
+
+    # First, try flat structure (direct device directories)
     for entry in sorted(os.listdir(screenshots_dir)):
         full_path = os.path.join(screenshots_dir, entry)
         if not os.path.isdir(full_path):
             continue
+
         parsed = _parse_device_key(entry)
-        if parsed is None:
-            continue
-        device_key, locale = parsed
-        groups.setdefault(device_key, {})[locale] = full_path
+        if parsed is not None:
+            device_key, locale = parsed
+            groups.setdefault(device_key, {})[locale] = full_path
+
+    # If no devices found, try nested FTL structure (locale/ftl-results-*/device/)
+    if not groups:
+        for locale_entry in sorted(os.listdir(screenshots_dir)):
+            locale_dir = os.path.join(screenshots_dir, locale_entry)
+            if not os.path.isdir(locale_dir):
+                continue
+
+            # Look for ftl-results-* subdirectories
+            for results_entry in sorted(os.listdir(locale_dir)):
+                results_dir = os.path.join(locale_dir, results_entry)
+                if not os.path.isdir(results_dir):
+                    continue
+
+                # Look for device directories
+                for device_entry in sorted(os.listdir(results_dir)):
+                    device_dir = os.path.join(results_dir, device_entry)
+                    if not os.path.isdir(device_dir):
+                        continue
+
+                    parsed = _parse_device_key(device_entry)
+                    if parsed is not None:
+                        device_key, locale = parsed
+                        # Use artifacts subdirectory if it exists
+                        artifacts_dir = os.path.join(device_dir, "artifacts")
+                        if os.path.isdir(artifacts_dir):
+                            device_dir = artifacts_dir
+                        groups.setdefault(device_key, {})[locale] = device_dir
+
     return groups
 
 
