@@ -11,3 +11,11 @@ wheels/
 
 # Environment variables
 .env
+
+# Firebase Test Lab
+ftl-scripts/ftl-config.sh
+ftl-scripts/screenshots/
+ftl-scripts/ftl-results.json
+ftl-scripts/analysis-report.json
+ftl-scripts/node_modules/
+ftl-scripts/*.temp.json
